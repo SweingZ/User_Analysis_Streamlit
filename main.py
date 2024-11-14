@@ -33,6 +33,7 @@ async def fetch_all_sessions():
         sessions.append(session)
     return sessions
 
+
 # Function to fetch both user and session data
 async def fetch_data():
     user_data = await fetch_all_users()
@@ -48,6 +49,19 @@ def calculate_page_views(session_data):
     df = pd.DataFrame(list(page_views.items()), columns=['Path', 'Views'])
     df = df.sort_values('Views', ascending=False)
     return df
+
+def calculate_device_stats(session_data):
+    os_counter = Counter()
+    browser_counter = Counter()
+    device_counter = Counter()
+    
+    for session in session_data:
+        device_stats = session.get('device_stats', {})
+        os_counter[device_stats.get('os', 'Unknown')] += 1
+        browser_counter[device_stats.get('browser', 'Unknown')] += 1
+        device_counter[device_stats.get('device', 'Unknown')] += 1
+
+    return os_counter, browser_counter, device_counter
 
 # Fetch and display data using Streamlit's asyncio support
 def run():
@@ -126,6 +140,21 @@ def run():
         fig.update_traces(textinfo='percent+label')
         
         st.plotly_chart(fig)
+
+        st.divider()
+
+        st.subheader("Device Statistics Analysis")
+        os_counter, browser_counter, device_counter = calculate_device_stats(session_data)
+
+    # Create bar charts for OS, Browser, and Device
+        st.write("Operating System Distribution")
+        st.bar_chart(pd.Series(os_counter))
+
+        st.write("Browser Distribution")
+        st.bar_chart(pd.Series(browser_counter))
+
+        st.write("Device Distribution")
+        st.bar_chart(pd.Series(device_counter))
 
 # Run the code
 run()
