@@ -4,6 +4,7 @@ import motor.motor_asyncio
 import asyncio
 from bson import ObjectId
 import pandas as pd
+from collections import Counter
 
 # Connect to MongoDB
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://spandanbhattarai79:spandan123@spandan.ey3fvll.mongodb.net/")
@@ -38,6 +39,21 @@ async def fetch_data():
     user_data = await fetch_all_users()
     session_data = await fetch_all_sessions()
     return user_data, session_data
+
+def calculate_page_views(session_data):
+    page_views = Counter()
+    
+    for session in session_data:
+        # Get path_history from the session
+        paths = session.get('path_history', [])
+        if paths:
+            # Count each path occurrence
+            page_views.update(paths)
+    
+    # Convert to DataFrame for better visualization
+    df = pd.DataFrame(list(page_views.items()), columns=['Path', 'Views'])
+    df = df.sort_values('Views', ascending=False)
+    return df
 
 # Fetch and display data using Streamlit's asyncio support
 def run():
@@ -84,6 +100,33 @@ def run():
         st.write(f"**Average Session Time:** {int(avg_hours)} hours, {int(avg_minutes)} minutes, {int(avg_seconds)} seconds")
     else:
         st.write("No session data available.")
+
+
+    # Display page views analysis
+    st.subheader("Page Views Analysis")
+    
+    # Calculate page views
+    page_views_df = calculate_page_views(session_data)
+    
+
+    st.write("Page Views Chart")
+    st.bar_chart(data=page_views_df.set_index('Path')['Views'])
+
+    # Additional Analytics
+    st.subheader("Individual Page Analysis")
+    
+    if not page_views_df.empty:
+        most_viewed = page_views_df.iloc[0]
+        st.write(f"**Most Viewed Page:** {most_viewed['Path']} ({most_viewed['Views']} views)")
+        
+        # Calculate percentage of total views for each page
+        total_views = page_views_df['Views'].sum()
+        page_views_df['Percentage'] = (page_views_df['Views'] / total_views * 100).round(2)
+        
+        st.write("**Page View Distribution**")
+        st.dataframe(page_views_df.assign(
+            Percentage=lambda x: x['Percentage'].map('{:.2f}%'.format)
+        ), use_container_width=True)
 
 
 # Run the code
