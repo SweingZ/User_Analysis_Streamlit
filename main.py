@@ -5,6 +5,7 @@ import asyncio
 from bson import ObjectId
 import pandas as pd
 from collections import Counter
+import plotly.express as px  # Use Plotly Express for a simple pie chart
 
 # Connect to MongoDB
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://spandanbhattarai79:spandan123@spandan.ey3fvll.mongodb.net/")
@@ -20,7 +21,6 @@ st.title("User Analytics Dashboard")
 async def fetch_all_users():
     users = []
     async for user in user_collection.find():
-        # Convert ObjectId to string for JSON serialization
         user["_id"] = str(user["_id"])
         users.append(user)
     return users
@@ -29,7 +29,6 @@ async def fetch_all_users():
 async def fetch_all_sessions():
     sessions = []
     async for session in session_collection.find():
-        # Convert ObjectId to string for JSON serialization
         session["_id"] = str(session["_id"])
         sessions.append(session)
     return sessions
@@ -42,15 +41,10 @@ async def fetch_data():
 
 def calculate_page_views(session_data):
     page_views = Counter()
-    
     for session in session_data:
-        # Get path_history from the session
         paths = session.get('path_history', [])
         if paths:
-            # Count each path occurrence
             page_views.update(paths)
-    
-    # Convert to DataFrame for better visualization
     df = pd.DataFrame(list(page_views.items()), columns=['Path', 'Views'])
     df = df.sort_values('Views', ascending=False)
     return df
@@ -59,75 +53,79 @@ def calculate_page_views(session_data):
 def run():
     user_data, session_data = asyncio.run(fetch_data())
     
-    # Create a sidebar for additional navigation options
     st.sidebar.title("Filters")
     st.sidebar.write("Use the filters to narrow down your analytics view.")
 
-    # Display the main dashboard layout
     col1, col2 = st.columns(2)
-
     with col1:
         st.subheader("Total Visitors")
-        st.metric("Visitors", len(user_data))  # Display the total visitors as a metric
+        st.metric("Visitors", len(user_data))  
 
     with col2:
         st.subheader("Total Visits")
-        st.metric("Visits", len(session_data))  # Display the total sessions as a metric
+        st.metric("Visits", len(session_data))
 
     st.subheader("Average Session Time")
-
-    # Initialize the sum of session durations
     total_duration = 0
+    bounce = 0
 
-    # Loop through each session and calculate the duration
     for session in session_data:
-        # Convert session_start and session_end to datetime objects if they are strings
+        if session.get("bounce"):
+            bounce += 1
         session_start = session["session_start"]
         session_end = session["session_end"]
-
-        # Calculate the duration as a timedelta object
         session_duration = session_end - session_start
+        total_duration += session_duration.total_seconds()
 
-        # Add the session duration to the total duration
-        total_duration += session_duration.total_seconds()  # Convert to seconds for consistency
-
-    # Calculate the average session time (in seconds)
     if len(session_data) > 0:
         average_duration = total_duration / len(session_data)
-        # Convert seconds back to a readable time format (HH:MM:SS)
         avg_minutes, avg_seconds = divmod(average_duration, 60)
         avg_hours, avg_minutes = divmod(avg_minutes, 60)
         st.write(f"**Average Session Time:** {int(avg_hours)} hours, {int(avg_minutes)} minutes, {int(avg_seconds)} seconds")
     else:
         st.write("No session data available.")
 
+    st.divider()
 
-    # Display page views analysis
     st.subheader("Page Views Analysis")
-    
-    # Calculate page views
     page_views_df = calculate_page_views(session_data)
-    
-
     st.write("Page Views Chart")
     st.bar_chart(data=page_views_df.set_index('Path')['Views'])
 
-    # Additional Analytics
+    st.divider()
+
     st.subheader("Individual Page Analysis")
-    
     if not page_views_df.empty:
         most_viewed = page_views_df.iloc[0]
         st.write(f"**Most Viewed Page:** {most_viewed['Path']} ({most_viewed['Views']} views)")
-        
-        # Calculate percentage of total views for each page
         total_views = page_views_df['Views'].sum()
         page_views_df['Percentage'] = (page_views_df['Views'] / total_views * 100).round(2)
-        
         st.write("**Page View Distribution**")
         st.dataframe(page_views_df.assign(
             Percentage=lambda x: x['Percentage'].map('{:.2f}%'.format)
         ), use_container_width=True)
 
+    st.divider()
+
+    st.subheader("Bounce Rate Analysis")
+
+    # Calculating the bounce rate percentage
+    bounce_rate_percent = bounce/len(session_data) * 100
+    st.write(f"**Bounce Rate Percentage:** {bounce_rate_percent:.2f}%")
+    if len(session_data) > 0:
+        non_bounce = len(session_data) - bounce
+        bounce_data = pd.DataFrame({
+            "Category": ["Bounced", "Non-Bounced"],
+            "Count": [bounce, non_bounce]
+        })
+
+        # Create a donut chart by adding the hole parameter
+        fig = px.pie(bounce_data, values='Count', names='Category', title="Bounce Rate Distribution", hole=0.4)
+        
+        # Optional: Customize colors and display percentage inside
+        fig.update_traces(textinfo='percent+label')
+        
+        st.plotly_chart(fig)
 
 # Run the code
 run()
