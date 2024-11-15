@@ -64,11 +64,8 @@ def run():
 
     st.subheader("Average Session Time")
     total_duration = 0
-    bounce = 0
 
     for session in session_data:
-        if session.get("bounce"):
-            bounce += 1
         session_start = session["session_start"]
         session_end = session["session_end"]
         session_duration = session_end - session_start
@@ -110,6 +107,8 @@ def run():
 
     # Bounce Rate Analysis
     st.subheader("Bounce Rate Analysis")
+
+    bounce = counts_data.get("bounce_counts",0)
 
     # Calculating the bounce rate percentage
     bounce_rate_percent = (bounce / len(session_data) * 100) if len(session_data) > 0 else 0
