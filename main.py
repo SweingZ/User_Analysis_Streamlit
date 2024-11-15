@@ -12,6 +12,7 @@ client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://spandanbhattarai7
 database = client.USER_ANALYSIS
 user_collection = database.user
 session_collection = database.session_data
+count_collection = database.counts
 
 st.set_page_config(page_title="User Analytics Dashboard", layout="wide")
 
@@ -33,39 +34,21 @@ async def fetch_all_sessions():
         sessions.append(session)
     return sessions
 
+# Function to fetch counts from the counts collection
+async def fetch_counts():
+    counts = await count_collection.find_one()
+    return counts
 
 # Function to fetch both user and session data
 async def fetch_data():
     user_data = await fetch_all_users()
     session_data = await fetch_all_sessions()
-    return user_data, session_data
-
-def calculate_page_views(session_data):
-    page_views = Counter()
-    for session in session_data:
-        paths = session.get('path_history', [])
-        if paths:
-            page_views.update(paths)
-    df = pd.DataFrame(list(page_views.items()), columns=['Path', 'Views'])
-    df = df.sort_values('Views', ascending=False)
-    return df
-
-def calculate_device_stats(session_data):
-    os_counter = Counter()
-    browser_counter = Counter()
-    device_counter = Counter()
-    
-    for session in session_data:
-        device_stats = session.get('device_stats', {})
-        os_counter[device_stats.get('os', 'Unknown')] += 1
-        browser_counter[device_stats.get('browser', 'Unknown')] += 1
-        device_counter[device_stats.get('device', 'Unknown')] += 1
-
-    return os_counter, browser_counter, device_counter
+    counts_data = await fetch_counts()
+    return user_data, session_data, counts_data
 
 # Fetch and display data using Streamlit's asyncio support
 def run():
-    user_data, session_data = asyncio.run(fetch_data())
+    user_data, session_data, counts_data = asyncio.run(fetch_data())
     
     st.sidebar.title("Filters")
     st.sidebar.write("Use the filters to narrow down your analytics view.")
@@ -101,13 +84,17 @@ def run():
 
     st.divider()
 
+    # Page Views Analysis
     st.subheader("Page Views Analysis")
-    page_views_df = calculate_page_views(session_data)
+    page_counts = counts_data.get("page_counts", {})
+    page_views_df = pd.DataFrame(list(page_counts.items()), columns=['Path', 'Views'])
+    page_views_df = page_views_df.sort_values('Views', ascending=False)
     st.write("Page Views Chart")
     st.bar_chart(data=page_views_df.set_index('Path')['Views'])
 
     st.divider()
 
+    # Individual Page Analysis
     st.subheader("Individual Page Analysis")
     if not page_views_df.empty:
         most_viewed = page_views_df.iloc[0]
@@ -121,10 +108,11 @@ def run():
 
     st.divider()
 
+    # Bounce Rate Analysis
     st.subheader("Bounce Rate Analysis")
 
     # Calculating the bounce rate percentage
-    bounce_rate_percent = bounce/len(session_data) * 100
+    bounce_rate_percent = (bounce / len(session_data) * 100) if len(session_data) > 0 else 0
     st.write(f"**Bounce Rate Percentage:** {bounce_rate_percent:.2f}%")
     if len(session_data) > 0:
         non_bounce = len(session_data) - bounce
@@ -135,18 +123,19 @@ def run():
 
         # Create a donut chart by adding the hole parameter
         fig = px.pie(bounce_data, values='Count', names='Category', title="Bounce Rate Distribution", hole=0.4)
-        
-        # Optional: Customize colors and display percentage inside
         fig.update_traces(textinfo='percent+label')
         
         st.plotly_chart(fig)
 
         st.divider()
 
+        # Device Statistics Analysis
         st.subheader("Device Statistics Analysis")
-        os_counter, browser_counter, device_counter = calculate_device_stats(session_data)
+        os_counter = counts_data.get("os_counts", {})
+        browser_counter = counts_data.get("browser_counts", {})
+        device_counter = counts_data.get("device_counts", {})
 
-    # Create bar charts for OS, Browser, and Device
+        # Display OS, Browser, and Device Distribution
         st.write("Operating System Distribution")
         st.bar_chart(pd.Series(os_counter))
 
