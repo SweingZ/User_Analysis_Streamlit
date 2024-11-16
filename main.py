@@ -39,16 +39,27 @@ async def fetch_counts():
     counts = await count_collection.find_one()
     return counts
 
+async def fetch_location_data():
+    locations = []
+    async for session in session_collection.find():
+        location = session.get("location", {})
+        latitude = location.get("latitude")
+        longitude = location.get("longitude")
+        if latitude and longitude:
+            locations.append({"lat": float(latitude), "lon": float(longitude)})
+    return locations
+
 # Function to fetch both user and session data
 async def fetch_data():
     user_data = await fetch_all_users()
     session_data = await fetch_all_sessions()
     counts_data = await fetch_counts()
-    return user_data, session_data, counts_data
+    locations_data = await fetch_location_data()
+    return user_data, session_data, counts_data, locations_data
 
 # Fetch and display data using Streamlit's asyncio support
 def run():
-    user_data, session_data, counts_data = asyncio.run(fetch_data())
+    user_data, session_data, counts_data, locations_data = asyncio.run(fetch_data())
     
     st.sidebar.title("Filters")
     st.sidebar.write("Use the filters to narrow down your analytics view.")
@@ -128,21 +139,32 @@ def run():
 
         st.divider()
 
-        # Device Statistics Analysis
-        st.subheader("Device Statistics Analysis")
-        os_counter = counts_data.get("os_counts", {})
-        browser_counter = counts_data.get("browser_counts", {})
-        device_counter = counts_data.get("device_counts", {})
+    # Device Statistics Analysis
+    st.subheader("Device Statistics Analysis")
+    os_counter = counts_data.get("os_counts", {})
+    browser_counter = counts_data.get("browser_counts", {})
+    device_counter = counts_data.get("device_counts", {})
 
-        # Display OS, Browser, and Device Distribution
-        st.write("Operating System Distribution")
-        st.bar_chart(pd.Series(os_counter))
+    # Display OS, Browser, and Device Distribution
+    st.write("Operating System Distribution")
+    st.bar_chart(pd.Series(os_counter))
 
-        st.write("Browser Distribution")
-        st.bar_chart(pd.Series(browser_counter))
+    st.write("Browser Distribution")
+    st.bar_chart(pd.Series(browser_counter))
 
-        st.write("Device Distribution")
-        st.bar_chart(pd.Series(device_counter))
+    st.write("Device Distribution")
+    st.bar_chart(pd.Series(device_counter))
+
+    st.divider()
+
+    if locations_data:
+        # Convert to DataFrame for Streamlit compatibility
+        location_df = pd.DataFrame(locations_data)
+        
+        st.subheader("Location Map")
+        st.map(location_df)  # Automatically displays a map based on latitude and longitude
+    else:
+        st.write("No location data available.")
 
 # Run the code
 run()
