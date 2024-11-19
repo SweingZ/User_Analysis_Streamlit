@@ -60,9 +60,8 @@ async def fetch_data():
 # Fetch and display data using Streamlit's asyncio support
 def run():
     user_data, session_data, counts_data, locations_data = asyncio.run(fetch_data())
-    
-    st.sidebar.title("Filters")
-    st.sidebar.write("Use the filters to narrow down your analytics view.")
+    st.session_state["user_data"] = user_data
+    st.session_state["session_data"] = session_data
 
     col1, col2 = st.columns(2)
     with col1:
